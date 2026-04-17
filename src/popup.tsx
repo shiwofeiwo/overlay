@@ -1,5 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { findDOMNode } from 'react-dom';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
 
 import Overlay, { OverlayEvent, RefWrapper } from './overlay';
@@ -108,7 +107,7 @@ const Popup = React.forwardRef((props: PopupProps, ref) => {
   const mouseEnterTimer: any = useRef(null);
   const overlayClick = useRef(false);
 
-  const child: ReactElement | undefined = children && React.Children.only(children);
+  const child: ReactElement<any> | undefined = children && React.Children.only(children);
   const overlayChild: ReactElement | undefined = React.Children.only(overlay);
 
   useEffect(() => {
@@ -240,22 +239,20 @@ const Popup = React.forwardRef((props: PopupProps, ref) => {
     });
 
     // trigger 是安全节点
-    safeNodes.push(() => findDOMNode(triggerRef.current) as HTMLElement);
+    safeNodes.push(() => triggerRef.current);
   }
 
-  const target = otarget || (child ? () => findDOMNode(triggerRef.current) : body);
+  const target = otarget || (child ? () => triggerRef.current : body);
   const getContainer =
     typeof container === 'string'
       ? () => document.getElementById(container)
       : typeof container !== 'function'
         ? () => container
-        : () => container(findDOMNode(triggerRef.current) as HTMLElement);
-  const overlayContainer = followTrigger
-    ? () => findDOMNode(triggerRef.current)?.parentNode
-    : getContainer;
+        : () => container(triggerRef.current);
+  const overlayContainer = followTrigger ? () => triggerRef.current?.parentNode : getContainer;
 
   // triggerRef 可能会更新，等计算的时候再通过 findDOMNode 取真实值
-  const refWrapperRef = useCallback((ref) => {
+  const refWrapperRef = useCallback((ref: HTMLElement) => {
     triggerRef.current = ref;
   }, []);
   return (

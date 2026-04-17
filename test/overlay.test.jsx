@@ -1,14 +1,7 @@
-import React, { useRef, useState, useEffect } from 'react';
-import ReactDOM from 'react-dom';
-import ReactTestUtils, { act } from 'react-dom/test-utils';
-import simulateEvent from 'simulate-event';
-import { shallow, mount, configure } from 'enzyme';
-import Adapter from '@wojtekmaj/enzyme-adapter-react-17';
+import React, { act } from 'react';
+import { render as rtlRender, cleanup, fireEvent } from '@testing-library/react';
 import Overlay from '../src/index';
 
-configure({ adapter: new Adapter() });
-
-const { Popup } = Overlay;
 const delay = (time) => new Promise((resolve) => setTimeout(resolve, time));
 
 const style = {
@@ -19,91 +12,53 @@ const style = {
   boxShadow: '0 3px 6px -4px #0000001f, 0 6px 16px #00000014, 0 9px 28px 8px #0000000d',
 };
 
-const render = (element) => {
-  let inc;
-  const container = document.createElement('div');
-  document.body.appendChild(container);
-  ReactDOM.render(element, container, function () {
-    inc = this;
-  });
-  return {
-    setProps: (props) => {
-      act(() => {
-        ReactDOM.unmountComponentAtNode(container);
-        ReactDOM.render(React.cloneElement(element, props), container);
-      });
-    },
-    unmount: () => {
-      ReactDOM.unmountComponentAtNode(container);
-      document.body.removeChild(container);
-    },
-    instance: () => {
-      return inc;
-    },
-    find: (selector) => {
-      const node = document.querySelectorAll(selector);
-      if (node.length) {
-        node.simulate = (eventType) => {
-          simulateEvent.simulate(node[0], eventType);
-        };
-      }
-      return node;
-    },
-    update: () => {},
-  };
-};
-
 describe('Overlay', () => {
-  let wrapper;
-
-  beforeEach(() => {
-    const nodeListArr = [].slice.call(document.querySelectorAll('.next-overlay-wrapper'));
-
-    nodeListArr.forEach((node) => {
-      node.parentNode.removeChild(node);
+  afterEach(async () => {
+    await act(async () => {
+      cleanup();
+    });
+    document.querySelectorAll('.next-overlay-wrapper').forEach((node) => {
+      if (node.parentNode) node.parentNode.removeChild(node);
     });
   });
 
-  afterEach(() => {
-    if (wrapper) {
-      wrapper.unmount();
-      wrapper = null;
-    }
-  });
-
   it('renders', async () => {
-    const wrapper = mount(
+    const { rerender } = rtlRender(
       <Overlay visible points={['lt', 'tr']}>
         <div style={style} className="content" />
       </Overlay>
     );
 
-    expect(wrapper.find('.content').length).toBe(1);
+    expect(document.querySelectorAll('.content').length).toBe(1);
 
-    wrapper.setProps({
-      visible: false,
-    });
-    expect(wrapper.find('.content').length).toBe(0);
+    rerender(
+      <Overlay visible={false} points={['lt', 'tr']}>
+        <div style={style} className="content" />
+      </Overlay>
+    );
+    expect(document.querySelectorAll('.content').length).toBe(0);
 
-    wrapper.setProps({
-      visible: true,
-    });
-    expect(wrapper.find('.content').length).toBe(1);
+    rerender(
+      <Overlay visible points={['lt', 'tr']}>
+        <div style={style} className="content" />
+      </Overlay>
+    );
+    expect(document.querySelectorAll('.content').length).toBe(1);
   });
 
   it('should support wrapperStyle & wrapperClassname', async () => {
-    const wrapper = mount(
+    rtlRender(
       <Overlay visible wrapperClassName="wrapper" wrapperStyle={{ left: 1 }}>
         <div style={style} className="content" />
       </Overlay>
     );
 
-    expect(wrapper.find('.wrapper').length).toBe(1);
-    expect(wrapper.find('.wrapper').getDOMNode().style.left).toBe('1px');
+    expect(document.querySelectorAll('.wrapper').length).toBe(1);
+    expect(document.querySelector('.wrapper').style.left).toBe('1px');
   });
 
   it('should support rendering overlay and mask', async () => {
-    wrapper = mount(
+    const { rerender } = rtlRender(
       <Overlay
         visible={false}
         wrapperClassName="next-overlay-wrapper"
@@ -112,46 +67,59 @@ describe('Overlay', () => {
         <div className="content" />
       </Overlay>
     );
-    expect(wrapper.find('.next-overlay-wrapper').length).toBe(0);
+    expect(document.querySelectorAll('.next-overlay-wrapper').length).toBe(0);
 
-    wrapper.setProps({
-      visible: true,
-    });
-    wrapper.update();
+    rerender(
+      <Overlay
+        visible
+        wrapperClassName="next-overlay-wrapper"
+        maskClassName="next-overlay-backdrop"
+      >
+        <div className="content" />
+      </Overlay>
+    );
 
-    expect(wrapper.find('.next-overlay-wrapper').length).toBe(1);
-    expect(wrapper.find('.content').length).toBe(1);
-    expect(wrapper.find('.next-overlay-backdrop').length).toBe(0);
+    await delay(50);
+    expect(document.querySelectorAll('.next-overlay-wrapper').length).toBe(1);
+    expect(document.querySelectorAll('.content').length).toBe(1);
+    expect(document.querySelectorAll('.next-overlay-backdrop').length).toBe(0);
 
-    wrapper.setProps({
-      visible: true,
-      hasMask: true,
-    });
-    wrapper.update();
-    expect(wrapper.find('.next-overlay-wrapper').length).toBe(1);
-    expect(wrapper.find('.content').length).toBe(1);
-    expect(wrapper.find('.next-overlay-backdrop').length).toBe(1);
+    rerender(
+      <Overlay
+        visible
+        hasMask
+        wrapperClassName="next-overlay-wrapper"
+        maskClassName="next-overlay-backdrop"
+      >
+        <div className="content" />
+      </Overlay>
+    );
+    await delay(50);
+
+    expect(document.querySelectorAll('.next-overlay-wrapper').length).toBe(1);
+    expect(document.querySelectorAll('.content').length).toBe(1);
+    expect(document.querySelectorAll('.next-overlay-backdrop').length).toBe(1);
   });
 
-  it('should support canCloseByOutSideClick', () => {
+  it('should support canCloseByOutSideClick', async () => {
     const handleClose = jest.fn();
 
-    wrapper = mount(
+    rtlRender(
       <Overlay visible hasMask={false} canCloseByOutSideClick onRequestClose={handleClose}>
         <div className="content" />
       </Overlay>
     );
 
-    expect(wrapper.find('.content').length).toBe(1);
-    simulateEvent.simulate(document.body, 'mousedown', { target: document.body });
+    await delay(50);
+    expect(document.querySelectorAll('.content').length).toBe(1);
+    fireEvent.mouseDown(document.body);
     expect(handleClose).toBeCalledTimes(1);
   });
 
   it('should support canCloseByOutSideClick by click button', async () => {
     const handleClose = jest.fn();
 
-    // 需要冒泡环境
-    wrapper = render(
+    rtlRender(
       <div>
         <button>click</button>
         <Overlay visible onRequestClose={handleClose}>
@@ -160,15 +128,17 @@ describe('Overlay', () => {
       </div>
     );
 
-    wrapper.find('button').simulate('mousedown');
+    await delay(50);
+    const button = document.querySelector('button');
+    fireEvent.mouseDown(button);
     expect(handleClose).toBeCalledTimes(1);
   });
 
-  it('should support safeNode && canCloseByOutSideClick', () => {
+  it('should support safeNode && canCloseByOutSideClick', async () => {
     const handleClose = jest.fn();
     const ref = React.createRef();
 
-    wrapper = render(
+    rtlRender(
       <div>
         <button ref={ref}>click</button>
         <Overlay visible safeNode={() => ref.current} onRequestClose={handleClose}>
@@ -177,27 +147,32 @@ describe('Overlay', () => {
       </div>
     );
 
-    simulateEvent.simulate(document.querySelector('button'), 'mousedown');
+    await delay(50);
+    const button = document.querySelector('button');
+    fireEvent.mouseDown(button);
     expect(handleClose).toBeCalledTimes(0);
   });
 
-  it('should support canCloseByEsc', () => {
+  it('should support canCloseByEsc', async () => {
     const handleClose = jest.fn();
 
-    wrapper = mount(
+    const { rerender } = rtlRender(
       <Overlay visible canCloseByEsc={false} onRequestClose={handleClose}>
         <div className="content" />
       </Overlay>
     );
 
-    expect(wrapper.find('.content').length).toBe(1);
-    simulateEvent.simulate(document.body, 'keydown', { keyCode: 27 });
+    await delay(50);
+    expect(document.querySelectorAll('.content').length).toBe(1);
+    fireEvent.keyDown(document.body, { keyCode: 27 });
     expect(handleClose).toBeCalledTimes(0);
 
-    wrapper.setProps({
-      canCloseByEsc: true,
-    });
-    simulateEvent.simulate(document.body, 'keydown', { keyCode: 27 });
+    rerender(
+      <Overlay visible canCloseByEsc onRequestClose={handleClose}>
+        <div className="content" />
+      </Overlay>
+    );
+    fireEvent.keyDown(document.body, { keyCode: 27 });
     expect(handleClose).toBeCalledTimes(1);
   });
 
@@ -214,7 +189,7 @@ describe('Overlay', () => {
   it('should support canCloseByMask', async () => {
     const handleClose = jest.fn();
 
-    wrapper = render(
+    const { rerender } = rtlRender(
       <Overlay
         visible
         hasMask
@@ -229,79 +204,91 @@ describe('Overlay', () => {
 
     await delay(200);
     expect(document.querySelectorAll('.next-overlay-backdrop').length).toBe(1);
-    simulateEvent.simulate(document.querySelector('.next-overlay-backdrop'), 'mousedown');
+    fireEvent.mouseDown(document.querySelector('.next-overlay-backdrop'));
     expect(handleClose).toBeCalledTimes(0);
 
-    wrapper.setProps({
-      canCloseByMask: true,
-    });
-    wrapper.update();
+    rerender(
+      <Overlay
+        visible
+        hasMask
+        canCloseByMask
+        onRequestClose={handleClose}
+        maskClassName="next-overlay-backdrop"
+        maskStyle={maskStyle}
+      >
+        <div className="content" />
+      </Overlay>
+    );
 
-    simulateEvent.simulate(document.querySelector('.next-overlay-backdrop'), 'mousedown');
-
-    wrapper.update();
-
+    fireEvent.mouseDown(document.querySelector('.next-overlay-backdrop'));
     expect(handleClose).toBeCalledTimes(1);
   });
 
-  it('should support cache', () => {
-    wrapper = mount(
+  it('should support cache', async () => {
+    const { rerender } = rtlRender(
       <Overlay visible cache>
         <div className="content" />
       </Overlay>
     );
 
-    expect(wrapper.find('.content').length).toBe(1);
-    wrapper.setProps({
-      visible: false,
-    });
-    expect(wrapper.find('.content').length).toBe(1);
+    await delay(50);
+    expect(document.querySelectorAll('.content').length).toBe(1);
+    rerender(
+      <Overlay visible={false} cache>
+        <div className="content" />
+      </Overlay>
+    );
+    expect(document.querySelectorAll('.content').length).toBe(1);
   });
 
-  it('should support onOpen & onClose', () => {
+  it('should support onOpen & onClose', async () => {
     const onOpen = jest.fn();
     const onClose = jest.fn();
 
-    wrapper = mount(
+    const { rerender } = rtlRender(
       <Overlay visible onOpen={onOpen} onClose={onClose}>
         <div className="content" />
       </Overlay>
     );
 
-    expect(wrapper.find('.content').length).toBe(1);
-
+    await delay(50);
+    expect(document.querySelectorAll('.content').length).toBe(1);
     expect(onOpen).toBeCalledTimes(1);
     expect(onClose).toBeCalledTimes(0);
 
-    wrapper.setProps({
-      visible: false,
-    });
+    rerender(
+      <Overlay visible={false} onOpen={onOpen} onClose={onClose}>
+        <div className="content" />
+      </Overlay>
+    );
     expect(onClose).toBeCalledTimes(1);
   });
 
-  it('should support onOpen & onClose with cache', () => {
+  it('should support onOpen & onClose with cache', async () => {
     const onOpen = jest.fn();
     const onClose = jest.fn();
 
-    wrapper = mount(
+    const { rerender } = rtlRender(
       <Overlay visible cache onOpen={onOpen} onClose={onClose}>
         <div className="content" />
       </Overlay>
     );
 
-    expect(wrapper.find('.content').length).toBe(1);
-
+    await delay(50);
+    expect(document.querySelectorAll('.content').length).toBe(1);
     expect(onOpen).toBeCalledTimes(1);
     expect(onClose).toBeCalledTimes(0);
 
-    wrapper.setProps({
-      visible: false,
-    });
+    rerender(
+      <Overlay visible={false} cache onOpen={onOpen} onClose={onClose}>
+        <div className="content" />
+      </Overlay>
+    );
     expect(onClose).toBeCalledTimes(1);
   });
 
   it('should support autoFocus', async () => {
-    wrapper = render(
+    const { rerender } = rtlRender(
       <Overlay autoFocus visible>
         <div className="content">
           <input id="input" />
@@ -311,17 +298,22 @@ describe('Overlay', () => {
     await delay(200);
 
     expect(document.activeElement).toBe(document.querySelector('input'));
-    wrapper.setProps({
-      visible: false,
-    });
+    rerender(
+      <Overlay autoFocus visible={false}>
+        <div className="content">
+          <input id="input" />
+        </div>
+      </Overlay>
+    );
     await delay(200);
 
     expect(document.activeElement).toBe(document.body);
   });
+
   it('should propagate click event to parent DOM', async () => {
     const clickHandler = jest.fn();
 
-    wrapper = render(
+    rtlRender(
       <div id="overlay-container" onClick={clickHandler}>
         <Overlay visible container={'overlay-container'}>
           <div className="content-element" />
@@ -329,11 +321,10 @@ describe('Overlay', () => {
       </div>
     );
 
-    await delay(20);
-    expect(wrapper.find('.content-element').length).toBe(1);
+    await delay(50);
+    expect(document.querySelectorAll('.content-element').length).toBe(1);
 
-    simulateEvent.simulate(document.querySelector('.content-element'), 'click');
-
+    fireEvent.click(document.querySelector('.content-element'));
     expect(clickHandler).toBeCalledTimes(1);
   });
 });

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useLayoutEffect, useCallback } from 'react';
-import { findDOMNode } from 'react-dom';
 
 type CanListenNode = Document | HTMLElement;
 
@@ -153,14 +152,14 @@ function isContainingBlock(ele: Element) {
 
   return Boolean(
     (css.transform && css.transform !== 'none') ||
-      (css.perspective && css.perspective !== 'none') ||
-      (css.containerType && css.containerType !== 'normal') ||
-      (!webkit && css.backdropFilter && css.backdropFilter !== 'none') ||
-      (!webkit && css.filter && css.filter !== 'none') ||
-      ['transform', 'perspective', 'filter'].some((value) =>
-        (css.willChange || '').includes(value)
-      ) ||
-      ['paint', 'layout', 'strict', 'content'].some((value) => (css.contain || '').includes(value))
+    (css.perspective && css.perspective !== 'none') ||
+    (css.containerType && css.containerType !== 'normal') ||
+    (!webkit && css.backdropFilter && css.backdropFilter !== 'none') ||
+    (!webkit && css.filter && css.filter !== 'none') ||
+    ['transform', 'perspective', 'filter'].some((value) =>
+      (css.willChange || '').includes(value)
+    ) ||
+    ['paint', 'layout', 'strict', 'content'].some((value) => (css.contain || '').includes(value))
   );
 }
 
@@ -258,7 +257,7 @@ function getOffsetParent(element: HTMLElement): HTMLElement | null {
   return offsetParent as HTMLElement;
 }
 
-export function getViewPortExcludeSelf(target: HTMLElement) {
+export function getViewPortExcludeSelf(target: HTMLElement): HTMLElement {
   const fallbackViewportElement = document.documentElement;
   if (!target) {
     return fallbackViewportElement;
@@ -516,7 +515,7 @@ export function getFocusNodeList(node: HTMLElement) {
   return res;
 }
 
-export function getHTMLElement(node: any) {
+export function getHTMLElement(node: any): HTMLElement | null {
   if (node) {
     if (node.nodeType) {
       if (node.nodeType === 1) {
@@ -526,8 +525,6 @@ export function getHTMLElement(node: any) {
       }
     } else if (node === window) {
       return document.body;
-    } else {
-      return findDOMNode(node);
     }
   }
   return node;
@@ -568,7 +565,7 @@ export const useEvent = (handler: Function) => {
     handleRef.current = handler;
   });
 
-  return useCallback((...args) => {
+  return useCallback((...args: any[]) => {
     const fn = handleRef.current;
 
     return fn(...args);

@@ -1,12 +1,6 @@
-import React, { useRef, useState, useEffect } from 'react';
-import ReactDOM from 'react-dom';
-import ReactTestUtils, { act } from 'react-dom/test-utils';
-import simulateEvent from 'simulate-event';
-import { shallow, mount, configure } from 'enzyme';
-import Adapter from '@wojtekmaj/enzyme-adapter-react-17';
+import React, { useRef, useState, useEffect, act } from 'react';
+import { render as rtlRender, fireEvent } from '@testing-library/react';
 import Overlay from '../src/index';
-
-configure({ adapter: new Adapter() });
 
 const { Popup } = Overlay;
 const delay = (time) => new Promise((resolve) => setTimeout(resolve, time));
@@ -19,60 +13,15 @@ const style = {
   boxShadow: '0 3px 6px -4px #0000001f, 0 6px 16px #00000014, 0 9px 28px 8px #0000000d',
 };
 
-const render = (element) => {
-  let inc;
-  const container = document.createElement('div');
-  document.body.appendChild(container);
-  ReactDOM.render(element, container, function () {
-    inc = this;
-  });
-  return {
-    setProps: (props) => {
-      act(() => {
-        ReactDOM.unmountComponentAtNode(container);
-        ReactDOM.render(React.cloneElement(element, props), container);
-      });
-    },
-    unmount: () => {
-      ReactDOM.unmountComponentAtNode(container);
-      document.body.removeChild(container);
-    },
-    instance: () => {
-      return inc;
-    },
-    find: (selector) => {
-      const node = document.querySelectorAll(selector);
-      if (node.length) {
-        node.simulate = (eventType) => {
-          simulateEvent.simulate(node[0], eventType);
-        };
-      }
-      return node;
-    },
-    update: () => {},
-  };
-};
-
 describe('Popup', () => {
-  let wrapper;
-
-  beforeEach(() => {
-    const nodeListArr = [].slice.call(document.querySelectorAll('div'));
-
-    nodeListArr.forEach((node) => {
-      node.parentNode.removeChild(node);
+  afterEach(() => {
+    document.querySelectorAll('.next-overlay-wrapper').forEach((node) => {
+      node.parentNode && node.parentNode.removeChild(node);
     });
   });
 
-  afterEach(() => {
-    if (wrapper) {
-      wrapper.unmount();
-      wrapper = null;
-    }
-  });
-
   it('renders', async () => {
-    const wrapper = mount(
+    const { rerender } = rtlRender(
       <Popup
         overlay={
           <div style={style} id="content" className="content">
@@ -84,27 +33,43 @@ describe('Popup', () => {
       </Popup>
     );
 
-    expect(wrapper.find('.content').length).toBe(0);
-    expect(wrapper.find('button').length).toBe(1);
+    expect(document.querySelectorAll('.content').length).toBe(0);
+    expect(document.querySelectorAll('button').length).toBe(1);
 
-    wrapper.setProps({
-      visible: true,
-    });
-    wrapper.update();
+    rerender(
+      <Popup
+        visible
+        overlay={
+          <div style={style} id="content" className="content">
+            Hello World From Popup!
+          </div>
+        }
+      >
+        <button>Open</button>
+      </Popup>
+    );
 
-    expect(wrapper.find('button').length).toBe(1);
-    expect(wrapper.find('.content').length).toBe(1);
+    expect(document.querySelectorAll('button').length).toBe(1);
+    expect(document.querySelectorAll('.content').length).toBe(1);
 
-    wrapper.setProps({
-      visible: false,
-    });
-    wrapper.update();
+    rerender(
+      <Popup
+        visible={false}
+        overlay={
+          <div style={style} id="content" className="content">
+            Hello World From Popup!
+          </div>
+        }
+      >
+        <button>Open</button>
+      </Popup>
+    );
 
-    expect(wrapper.find('.content').length).toBe(0);
+    expect(document.querySelectorAll('.content').length).toBe(0);
   });
 
   it('should support triggerType=click', async () => {
-    wrapper = mount(
+    rtlRender(
       <Popup
         triggerType="click"
         overlay={
@@ -117,23 +82,25 @@ describe('Popup', () => {
       </Popup>
     );
 
-    expect(wrapper.find('button').length).toBe(1);
-    expect(wrapper.find('.content').length).toBe(0);
+    expect(document.querySelectorAll('button').length).toBe(1);
+    expect(document.querySelectorAll('.content').length).toBe(0);
 
-    wrapper.find('button').simulate('click');
-    wrapper.update();
-    expect(wrapper.find('.content').length).toBe(1);
+    const button = document.querySelector('button');
+    fireEvent.click(button);
+
+    await delay(50);
+    expect(document.querySelectorAll('.content').length).toBe(1);
 
     act(() => {
-      simulateEvent.simulate(document.body, 'mousedown');
+      fireEvent.mouseDown(document.body);
     });
-    wrapper.update();
 
-    expect(wrapper.find('.content').length).toBe(0);
+    await delay(50);
+    expect(document.querySelectorAll('.content').length).toBe(0);
   });
 
   it('should not call onclose with disabled=true', async () => {
-    wrapper = mount(
+    rtlRender(
       <Popup
         disabled
         triggerType="click"
@@ -147,16 +114,18 @@ describe('Popup', () => {
       </Popup>
     );
 
-    expect(wrapper.find('button').length).toBe(1);
-    expect(wrapper.find('.content').length).toBe(0);
+    expect(document.querySelectorAll('button').length).toBe(1);
+    expect(document.querySelectorAll('.content').length).toBe(0);
 
-    wrapper.find('button').simulate('click');
-    wrapper.update();
-    expect(wrapper.find('.content').length).toBe(0);
+    const button = document.querySelector('button');
+    fireEvent.click(button);
+
+    await delay(50);
+    expect(document.querySelectorAll('.content').length).toBe(0);
   });
 
   it('should not call onclose with disabled=true and visible=true', async () => {
-    wrapper = mount(
+    rtlRender(
       <Popup
         disabled
         visible
@@ -171,16 +140,18 @@ describe('Popup', () => {
       </Popup>
     );
 
-    expect(wrapper.find('button').length).toBe(1);
-    expect(wrapper.find('.content').length).toBe(1);
+    expect(document.querySelectorAll('button').length).toBe(1);
+    expect(document.querySelectorAll('.content').length).toBe(1);
 
-    wrapper.find('button').simulate('click');
-    wrapper.update();
-    expect(wrapper.find('.content').length).toBe(1);
+    const button = document.querySelector('button');
+    fireEvent.click(button);
+
+    await delay(50);
+    expect(document.querySelectorAll('.content').length).toBe(1);
   });
 
   it('should support triggerType=focus', async () => {
-    wrapper = mount(
+    rtlRender(
       <Popup
         triggerType="focus"
         overlay={
@@ -193,22 +164,25 @@ describe('Popup', () => {
       </Popup>
     );
 
-    expect(wrapper.find('button').length).toBe(1);
-    expect(wrapper.find('.content').length).toBe(0);
+    expect(document.querySelectorAll('button').length).toBe(1);
+    expect(document.querySelectorAll('.content').length).toBe(0);
 
-    wrapper.find('button').simulate('focus');
-    wrapper.update();
-    expect(wrapper.find('.content').length).toBe(1);
+    const button = document.querySelector('button');
+    fireEvent.focus(button);
 
-    wrapper.find('button').simulate('blur');
-    wrapper.update();
-    expect(wrapper.find('.content').length).toBe(0);
+    await delay(50);
+    expect(document.querySelectorAll('.content').length).toBe(1);
+
+    fireEvent.blur(button);
+
+    await delay(50);
+    expect(document.querySelectorAll('.content').length).toBe(0);
   });
 
   it('should support triggerType=hover', async () => {
     jest.useFakeTimers();
 
-    wrapper = mount(
+    rtlRender(
       <Popup
         triggerType="hover"
         overlay={
@@ -221,22 +195,23 @@ describe('Popup', () => {
       </Popup>
     );
 
-    expect(wrapper.find('button').length).toBe(1);
-    expect(wrapper.find('.content').length).toBe(0);
+    expect(document.querySelectorAll('button').length).toBe(1);
+    expect(document.querySelectorAll('.content').length).toBe(0);
 
-    wrapper.find('button').at(0).simulate('mouseenter');
+    const button = document.querySelector('button');
+    fireEvent.mouseEnter(button);
     act(() => {
       jest.runAllTimers();
     });
-    wrapper.update();
-    expect(wrapper.find('.content').length).toBe(1);
 
-    wrapper.find('button').simulate('mouseleave');
+    expect(document.querySelectorAll('.content').length).toBe(1);
+
+    fireEvent.mouseLeave(button);
     act(() => {
       jest.runAllTimers();
     });
-    wrapper.update();
-    expect(wrapper.find('.content').length).toBe(0);
+
+    expect(document.querySelectorAll('.content').length).toBe(0);
     jest.useRealTimers();
   });
 
@@ -253,40 +228,39 @@ describe('Popup', () => {
         Hello World From Popup!
       </div>
     );
-    wrapper = render(
+    rtlRender(
       <Popup visible cache overlay={overlay} placement="b" autoAdjust={false}>
         <button style={{ width: 10, height: 10 }}>click</button>
       </Popup>
     );
 
     await delay(100);
-    expect(wrapper.find('.next-overlay-inner').length).toBe(1);
-    // jest 环境无法精确模拟
-    // expect(document.querySelector('.next-overlay-inner').style.left).toBe('10px');
+    expect(document.querySelectorAll('.next-overlay-inner').length).toBe(1);
   });
 
   it('should support Functional component', async () => {
     const ref = jest.fn();
 
     const FunctionalButton = (props) => <button {...props}>Open</button>;
-    const FunctionalOverlay = () => (
-      <div style={style} id="content" className="content">
+    const FunctionalOverlay = React.forwardRef((props, ref) => (
+      <div ref={ref} style={style} id="content" className="content">
         Hello World From Popup!
       </div>
-    );
-    const wrapper = mount(
+    ));
+    rtlRender(
       <Popup overlay={<FunctionalOverlay />} ref={ref}>
         <FunctionalButton />
       </Popup>
     );
 
-    expect(wrapper.find('.content').length).toBe(0);
-    expect(wrapper.find('button').length).toBe(1);
+    expect(document.querySelectorAll('.content').length).toBe(0);
+    expect(document.querySelectorAll('button').length).toBe(1);
 
-    wrapper.find('button').simulate('click');
-    wrapper.update();
+    const button = document.querySelector('button');
+    fireEvent.click(button);
 
-    expect(wrapper.find('.content').length).toBe(1);
+    await delay(50);
+    expect(document.querySelectorAll('.content').length).toBe(1);
     expect(ref).toBeCalledTimes(1);
   });
 
@@ -311,15 +285,16 @@ describe('Popup', () => {
       );
     };
 
-    const wrapper = mount(<Demo />);
+    rtlRender(<Demo />);
 
-    expect(wrapper.find('.content-nochildren').length).toBe(0);
-    expect(wrapper.find('button').length).toBe(1);
+    expect(document.querySelectorAll('.content-nochildren').length).toBe(0);
+    expect(document.querySelectorAll('button').length).toBe(1);
 
-    wrapper.find('button').simulate('click');
-    wrapper.update();
+    const button = document.querySelector('button');
+    fireEvent.click(button);
 
-    expect(wrapper.find('.content-nochildren').length).toBe(1);
+    await delay(50);
+    expect(document.querySelectorAll('.content-nochildren').length).toBe(1);
   });
 
   // 测试环境不支持真实的 dom 渲染，所以 placement 计算没有被调用到
@@ -359,7 +334,7 @@ describe('Popup', () => {
       return result;
     };
 
-    wrapper = render(
+    rtlRender(
       <Popup
         overlay={
           <div style={style} id="content" className="content">
@@ -373,9 +348,9 @@ describe('Popup', () => {
       </Popup>
     );
 
-    expect(wrapper.find('.content').length).toBe(0);
+    expect(document.querySelectorAll('.content').length).toBe(0);
 
-    wrapper.find('button').simulate('click');
-    wrapper.update();
+    const button = document.querySelector('button');
+    fireEvent.click(button);
   });
 });

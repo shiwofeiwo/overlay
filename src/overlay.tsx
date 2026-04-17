@@ -8,7 +8,7 @@ import React, {
   CSSProperties,
   ReactElement,
 } from 'react';
-import { findDOMNode, createPortal } from 'react-dom';
+import { createPortal } from 'react-dom';
 import ResizeObserver from 'resize-observer-polyfill';
 import getPlacements, { pointsType, placementType, PositionResult, TargetRect } from './placement';
 import {
@@ -25,7 +25,6 @@ import {
   getFocusNodeList,
   isSameObject,
   useEvent,
-  getWidthHeight,
 } from './utils';
 import OverlayContext from './overlay-context';
 
@@ -91,7 +90,7 @@ export interface OverlayProps {
   /**
    * 弹窗内容
    */
-  children?: ReactElement;
+  children?: ReactElement<any>;
   style?: CSSProperties;
   safeNode?: () => Element | Array<() => Element>;
   onMouseEnter?: () => void;
@@ -138,11 +137,11 @@ const hasScroll = (containerNode: HTMLElement) => {
 /**
  * 传入的组件可能是没有 forwardRef 包裹的 Functional Component, 会导致取不到 ref
  */
-export class RefWrapper extends React.Component {
-  render() {
-    return this.props.children;
+export const RefWrapper = React.forwardRef<HTMLElement, { children: ReactElement<any> }>(
+  ({ children }, ref) => {
+    return cloneElement(children, { ref });
   }
-}
+);
 
 const Overlay = React.forwardRef<HTMLDivElement, OverlayProps>((props, ref) => {
   const body = () => document.body;
@@ -227,8 +226,8 @@ const Overlay = React.forwardRef<HTMLDivElement, OverlayProps>((props, ref) => {
     setVisibleOverlayToParent(id, node);
   };
 
-  const child: ReactElement | undefined = React.Children.only(children);
-  if (typeof (child as any).ref === 'string') {
+  const child: ReactElement<any> | undefined = React.Children.only(children);
+  if (typeof (child as any).props?.ref === 'string') {
     throw new Error('Can not set ref by string in Overlay, use function instead.');
   }
 
@@ -266,8 +265,8 @@ const Overlay = React.forwardRef<HTMLDivElement, OverlayProps>((props, ref) => {
 
   // 弹窗挂载
   const overlayRefCallback = useCallback(
-    (nodeRef) => {
-      const node = findDOMNode(nodeRef) as HTMLElement;
+    (nodeRef: HTMLElement) => {
+      const node = nodeRef;
       overlayRef.current = node;
       callRef(ref, node);
       if (node !== null && container) {
