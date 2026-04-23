@@ -393,7 +393,8 @@ const Overlay = React.forwardRef<HTMLDivElement, OverlayProps>((props, ref) => {
   );
 
   const clickEvent = useEvent((e: OverlayEvent) => {
-    // 点击在子元素上面，则忽略。为了兼容 react16，这里用 contains 判断而不利用 e.stopPropagation() 阻止冒泡的特性来处理
+    // 点击在子 overlay 上面，则忽略。用 contains 判断而不依赖 e.stopPropagation()，
+    // 以避免 React 事件委托（挂在 root）与原生 document 监听之间的冒泡差异。
     for (const [, oNode] of childIDMap.current.entries()) {
       const node = getHTMLElement(oNode);
       if (node && (node === e.target || node.contains(e.target as Node))) {
@@ -437,9 +438,8 @@ const Overlay = React.forwardRef<HTMLDivElement, OverlayProps>((props, ref) => {
 
   // 这里用 mousedown 而不是用 click。因为 click 是 mouseup 才触发。
   // 如果用 click 带来的问题: mousedown 在弹窗内部，然后按住鼠标不放拖动到弹窗外触发 mouseup 结果弹窗关了，这是不期望的展示。 https://github.com/alibaba-fusion/next/issues/742
-  // react 17 冒泡问题:
-  //  - react17 中，如果弹窗 mousedown 阻止了 e.stopPropagation(), 那么 document 就不会监听到事件，因为事件冒泡到挂载节点 rootElement 就中断了。
-  //  - https://reactjs.org/blog/2020/08/10/react-v17-rc.html#changes-to-event-delegation
+  // 注意：React 17+ 将事件委托改挂在 root 而非 document，弹窗内 e.stopPropagation() 不会阻止 document 监听。
+  // https://reactjs.org/blog/2020/08/10/react-v17-rc.html#changes-to-event-delegation
   useListener(
     typeof document !== 'undefined' ? document : null,
     'mousedown',

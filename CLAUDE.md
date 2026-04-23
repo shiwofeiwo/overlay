@@ -6,14 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `@alifd/overlay` is a React overlay/popup base component from the Alibaba Fusion Design ecosystem. It provides positioned floating layers (dropdowns, tooltips, dialogs, popups) with auto-positioning, viewport overflow adjustment, and RTL support. The only runtime dependency is `resize-observer-polyfill`.
 
-**React 17 project** — uses legacy APIs (`findDOMNode`, `ReactDOM.render`). Source is TypeScript; tests are JavaScript/JSX.
+**React 19 project** — migrated from React 17. `findDOMNode` has been replaced by a `LegacyRefBridge` fallback inside `RefWrapper` that preserves equivalent DOM-resolution behavior for class components and legacy function components. Source is TypeScript; tests are JavaScript/JSX.
 
 ## Commands
 
 ```bash
 npm start              # Dev server
 npm run build          # Production build (es/ + lib/ + build/)
-npm test               # Run all tests (Jest + Enzyme)
+npm test               # Run all tests (Jest + React Testing Library)
 npm run lint           # ESLint + Stylelint
 npm run eslint         # ESLint only
 npm run eslint:fix     # Auto-fix ESLint issues
@@ -48,7 +48,10 @@ npm install --legacy-peer-deps
 
 ### Internal Pattern: RefWrapper
 
-A class component in `overlay.tsx` used to obtain refs from functional components that may not forward refs.
+A `forwardRef` component in `overlay.tsx` used to obtain the child's DOM. It branches on whether the child can accept a ref directly:
+
+- HTML intrinsic / `forwardRef` / `memo(forwardRef)` → transparent `cloneElement(children, { ref })`, zero DOM overhead
+- class component / legacy function component → falls back to `LegacyRefBridge`, which inserts a `display:none` marker `<span>` and resolves the first DOM sibling at commit time. Functionally equivalent to the removed `findDOMNode` behavior.
 
 ## Build System
 
@@ -59,4 +62,4 @@ Uses `@alib/build-scripts` with `build-plugin-component` and `build-plugin-fusio
 - **Language**: Code comments and README are in Chinese
 - **Commit format**: Conventional commits enforced via commitlint + husky. Allowed types include a non-standard `typescript` type
 - **Linting**: ESLint (`@iceworks/spec/react-ts`), Stylelint, Prettier — all run on pre-commit via lint-staged
-- **Tests**: Jest + Enzyme with `@wojtekmaj/enzyme-adapter-react-17`. Custom `render()` helper using `ReactDOM.render` + `simulate-event` for DOM simulation
+- **Tests**: Jest + `@testing-library/react@16` (compatible with React 18/19). Use `render` / `rerender` / `fireEvent` from `@testing-library/react`; `act` is imported from `react`

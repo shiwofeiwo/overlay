@@ -251,7 +251,8 @@ const Popup = React.forwardRef((props: PopupProps, ref) => {
         : () => container(triggerRef.current);
   const overlayContainer = followTrigger ? () => triggerRef.current?.parentNode : getContainer;
 
-  // triggerRef 可能会更新，等计算的时候再通过 findDOMNode 取真实值
+  // RefWrapper 传入的 ref 可能是 DOM、class instance 或带 getDOMNode 的 wrapper，
+  // 用 getHTMLElement 归一化为 HTMLElement。
   const refWrapperRef = useCallback((ref: any) => {
     triggerRef.current = getHTMLElement(ref);
   }, []);
