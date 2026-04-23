@@ -516,18 +516,27 @@ export function getFocusNodeList(node: HTMLElement) {
 }
 
 export function getHTMLElement(node: any): HTMLElement | null {
-  if (node) {
-    if (node.nodeType) {
-      if (node.nodeType === 1) {
-        return node;
-      } else {
-        return document.body;
-      }
-    } else if (node === window) {
-      return document.body;
-    }
+  if (!node) {
+    return null;
   }
-  return node;
+  if (node === window) {
+    return document.body;
+  }
+  if (node.nodeType === 1) {
+    return node;
+  }
+  if (node.nodeType) {
+    // 非 element 节点（Document / Text / Comment / DocumentFragment 等）
+    // 与 React 17 原版保持一致：软兜底到 document.body
+    return document.body;
+  }
+  if (typeof node.getDOMNode === 'function') {
+    return getHTMLElement(node.getDOMNode());
+  }
+  // React 19 已移除 findDOMNode，对 class instance 等无公开 API 可还原。
+  // 组件内部路径不会命中（RefWrapper 的 LegacyRefBridge 已兜底）；
+  // 若用户在 target/safeNode/container 回调手动返回 class instance，会得到 null。
+  return null;
 }
 
 export function getTargetNode(target: any) {

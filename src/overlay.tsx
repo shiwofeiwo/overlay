@@ -3,6 +3,7 @@ import React, {
   useState,
   useCallback,
   useRef,
+  useLayoutEffect,
   cloneElement,
   useContext,
   CSSProperties,
@@ -134,12 +135,79 @@ const hasScroll = (containerNode: HTMLElement) => {
   );
 };
 
+const REACT_FORWARD_REF_TYPE = Symbol.for('react.forward_ref');
+const REACT_MEMO_TYPE = Symbol.for('react.memo');
+
+/**
+ * 判断 element 是否能直接接收 ref（HTML 元素、forwardRef、memo(forwardRef)）
+ */
+function canAcceptRef(element: ReactElement<any>): boolean {
+  const type: any = (element as any)?.type;
+  if (!type) return false;
+  if (typeof type === 'string') return true;
+  if (type.$$typeof === REACT_FORWARD_REF_TYPE) return true;
+  if (type.$$typeof === REACT_MEMO_TYPE && type.type) {
+    const unwrapped: ReactElement<any> = { ...element, type: type.type };
+    return canAcceptRef(unwrapped);
+  }
+  return false;
+}
+
+/**
+ * 兜底：当 children 不能接收 ref（class 组件 / 旧式函数组件）时，
+ * 插入一个 display:none 的 marker span，commit 阶段通过 nextElementSibling 取到
+ * children 渲染出的第一个 DOM。等价于原 React 17 `findDOMNode` 的行为。
+ */
+const LegacyRefBridge = React.forwardRef<HTMLElement, { children: ReactElement<any> }>(
+  ({ children }, ref) => {
+    const markerRef = useRef<HTMLSpanElement>(null);
+    const lastNodeRef = useRef<HTMLElement | null>(null);
+
+    useLayoutEffect(() => {
+      const marker = markerRef.current;
+      let node: HTMLElement | null = null;
+      if (marker) {
+        const sibling = marker.nextElementSibling;
+        if (sibling && sibling.nodeType === 1) {
+          node = sibling as HTMLElement;
+        }
+      }
+      if (lastNodeRef.current !== node) {
+        lastNodeRef.current = node;
+        callRef(ref, node as HTMLElement);
+      }
+    });
+
+    useEffect(
+      () => () => {
+        if (lastNodeRef.current) {
+          lastNodeRef.current = null;
+          callRef(ref, null as any);
+        }
+      },
+      []
+    );
+
+    return (
+      <>
+        <span ref={markerRef} style={{ display: 'none' }} aria-hidden="true" />
+        {children}
+      </>
+    );
+  }
+);
+
 /**
  * 传入的组件可能是没有 forwardRef 包裹的 Functional Component, 会导致取不到 ref
+ * - HTML 元素 / forwardRef / memo(forwardRef)：cloneElement 透明透传 ref，零 DOM 侵入
+ * - class 组件 / 旧式函数组件：走 LegacyRefBridge 兜底，等价原 findDOMNode 行为
  */
 export const RefWrapper = React.forwardRef<HTMLElement, { children: ReactElement<any> }>(
   ({ children }, ref) => {
-    return cloneElement(children, { ref });
+    if (canAcceptRef(children)) {
+      return cloneElement(children, { ref });
+    }
+    return <LegacyRefBridge ref={ref}>{children}</LegacyRefBridge>;
   }
 );
 
@@ -266,7 +334,7 @@ const Overlay = React.forwardRef<HTMLDivElement, OverlayProps>((props, ref) => {
   // 弹窗挂载
   const overlayRefCallback = useCallback(
     (nodeRef: HTMLElement) => {
-      const node = nodeRef;
+      const node = getHTMLElement(nodeRef);
       overlayRef.current = node;
       callRef(ref, node);
       if (node !== null && container) {
@@ -324,7 +392,7 @@ const Overlay = React.forwardRef<HTMLDivElement, OverlayProps>((props, ref) => {
     [container]
   );
 
-  const clickEvent = (e: OverlayEvent) => {
+  const clickEvent = useEvent((e: OverlayEvent) => {
     // 点击在子元素上面，则忽略。为了兼容 react16，这里用 contains 判断而不利用 e.stopPropagation() 阻止冒泡的特性来处理
     for (const [, oNode] of childIDMap.current.entries()) {
       const node = getHTMLElement(oNode);
@@ -365,7 +433,7 @@ const Overlay = React.forwardRef<HTMLDivElement, OverlayProps>((props, ref) => {
     if (canCloseByOutSideClick) {
       onRequestClose('docClick', e); // TODO: will rename to `doc` in 1.0
     }
-  };
+  });
 
   // 这里用 mousedown 而不是用 click。因为 click 是 mouseup 才触发。
   // 如果用 click 带来的问题: mousedown 在弹窗内部，然后按住鼠标不放拖动到弹窗外触发 mouseup 结果弹窗关了，这是不期望的展示。 https://github.com/alibaba-fusion/next/issues/742
@@ -380,7 +448,7 @@ const Overlay = React.forwardRef<HTMLDivElement, OverlayProps>((props, ref) => {
     !!(visible && overlayRef.current && (canCloseByOutSideClick || (hasMask && canCloseByMask)))
   );
 
-  const keydownEvent = (e: OverlayEvent) => {
+  const keydownEvent = useEvent((e: OverlayEvent) => {
     if (!visible) {
       return;
     }
@@ -389,7 +457,7 @@ const Overlay = React.forwardRef<HTMLDivElement, OverlayProps>((props, ref) => {
     if (e.keyCode === 27 && canCloseByEsc && !childIDMap.current.size) {
       onRequestClose('esc', e);
     }
-  };
+  });
   useListener(
     typeof document !== 'undefined' ? document : null,
     'keydown',
@@ -398,12 +466,12 @@ const Overlay = React.forwardRef<HTMLDivElement, OverlayProps>((props, ref) => {
     !!(visible && overlayRef.current && canCloseByEsc)
   );
 
-  const scrollEvent = (e: OverlayEvent) => {
+  const scrollEvent = useEvent((_e: OverlayEvent) => {
     if (!visible) {
       return;
     }
     updatePosition();
-  };
+  });
   useListener(
     typeof document !== 'undefined'
       ? overflowRef.current?.map((t) => (t === document.documentElement ? document : t))

@@ -3,7 +3,7 @@ import type { CSSProperties, ReactElement } from 'react';
 
 import Overlay, { OverlayEvent, RefWrapper } from './overlay';
 import { placementType } from './placement';
-import { makeChain, saveRef } from './utils';
+import { makeChain, saveRef, getHTMLElement } from './utils';
 
 type TriggerType = 'click' | 'hover' | 'focus';
 export type TriggerTypes = TriggerType[];
@@ -252,8 +252,8 @@ const Popup = React.forwardRef((props: PopupProps, ref) => {
   const overlayContainer = followTrigger ? () => triggerRef.current?.parentNode : getContainer;
 
   // triggerRef 可能会更新，等计算的时候再通过 findDOMNode 取真实值
-  const refWrapperRef = useCallback((ref: HTMLElement) => {
-    triggerRef.current = ref;
+  const refWrapperRef = useCallback((ref: any) => {
+    triggerRef.current = getHTMLElement(ref);
   }, []);
   return (
     <>
