@@ -327,4 +327,89 @@ describe('Overlay', () => {
     fireEvent.click(document.querySelector('.content-element'));
     expect(clickHandler).toBeCalledTimes(1);
   });
+
+  // ---------------------------------------------------------------------------
+  // RefWrapper: React 19 findDOMNode replacement
+  //
+  // React 19 removed findDOMNode, which used to let Overlay resolve the DOM
+  // behind any child (class component / legacy FC / HTML / forwardRef).
+  // RefWrapper now branches: forwardRef-compatible children go through
+  // cloneElement(ref), others are resolved via LegacyRefBridge (marker span +
+  // nextElementSibling). The tests below cover all three paths.
+  // ---------------------------------------------------------------------------
+
+  it('RefWrapper fallback: resolves DOM when child is a class component', async () => {
+    class LegacyBox extends React.Component {
+      render() {
+        return (
+          <div className="legacy-box" style={{ width: 100, height: 100 }}>
+            legacy
+          </div>
+        );
+      }
+    }
+
+    const onOpen = jest.fn();
+
+    rtlRender(
+      <Overlay visible onOpen={onOpen}>
+        <LegacyBox />
+      </Overlay>
+    );
+
+    await delay(50);
+
+    const dom = document.querySelector('.legacy-box');
+    expect(dom).not.toBeNull();
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    // onOpen receives the real DOM of the class component — same guarantee
+    // findDOMNode used to give us on React 17.
+    expect(onOpen.mock.calls[0][0]).toBe(dom);
+  });
+
+  it('RefWrapper fallback: resolves DOM when child is a plain function component', async () => {
+    const PlainBox = ({ children }) => (
+      <div className="plain-box" style={{ width: 100, height: 100 }}>
+        {children}
+      </div>
+    );
+
+    const onOpen = jest.fn();
+
+    rtlRender(
+      <Overlay visible onOpen={onOpen}>
+        <PlainBox>plain</PlainBox>
+      </Overlay>
+    );
+
+    await delay(50);
+
+    const dom = document.querySelector('.plain-box');
+    expect(dom).not.toBeNull();
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(onOpen.mock.calls[0][0]).toBe(dom);
+  });
+
+  it('RefWrapper transparent path: uses cloneElement for forwardRef children', async () => {
+    const FwdBox = React.forwardRef((props, ref) => (
+      <div ref={ref} className="fwd-box" style={{ width: 100, height: 100 }}>
+        fwd
+      </div>
+    ));
+
+    const onOpen = jest.fn();
+
+    rtlRender(
+      <Overlay visible onOpen={onOpen}>
+        <FwdBox />
+      </Overlay>
+    );
+
+    await delay(50);
+
+    const dom = document.querySelector('.fwd-box');
+    expect(dom).not.toBeNull();
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(onOpen.mock.calls[0][0]).toBe(dom);
+  });
 });
