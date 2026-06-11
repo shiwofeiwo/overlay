@@ -1,4 +1,5 @@
 import { useEffect, useRef, useLayoutEffect, useCallback } from 'react';
+import { fiberShim } from './fiber-shim';
 
 type CanListenNode = Document | HTMLElement;
 
@@ -530,12 +531,23 @@ export function getHTMLElement(node: any): HTMLElement | null {
     // 与 React 17 原版保持一致：软兜底到 document.body
     return document.body;
   }
+  // class 组件实例：优先用公开的 getDOMNode()，返回非空则归一化返回。
+  // 与 @alifd/next 的 find-node getNodeFromInstance 处理方式保持一致。
   if (typeof node.getDOMNode === 'function') {
-    return getHTMLElement(node.getDOMNode());
+    const dom = node.getDOMNode();
+    if (dom) {
+      return getHTMLElement(dom);
+    }
+    // getDOMNode() 返回 null：React 19 下组件内部依赖了已移除的 findDOMNode
+    // （如 @alifd/next 的 Config HOC = forwardRef 包裹 class，ref 透传后指向 class 实例），
+    // 不能就此返回 null，需 fallthrough 到 fiberShim 兜底。
   }
-  // React 19 已移除 findDOMNode，对 class instance 等无公开 API 可还原。
-  // 组件内部路径不会命中（RefWrapper 的 LegacyRefBridge 已兜底）；
-  // 若用户在 target/safeNode/container 回调手动返回 class instance，会得到 null。
+  // React 19 已移除 findDOMNode，对 class instance 用 fiber 私有结构反查根 DOM，
+  // 等价原 findDOMNode 行为。覆盖 RefWrapper 经 cloneElement 透传 ref 指向 class 实例的场景。
+  const shimmed = fiberShim(node);
+  if (shimmed) {
+    return getHTMLElement(shimmed);
+  }
   return null;
 }
 
